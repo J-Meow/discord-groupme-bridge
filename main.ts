@@ -1,3 +1,21 @@
+import { Client, Events, GatewayIntentBits, TextChannel } from "npm:discord.js"
+
+const client = new Client({ intents: [GatewayIntentBits.Guilds] })
+
+const discordNameToId: { [key: string]: string } = {}
+
+client.once(Events.ClientReady, async (readyClient) => {
+    console.log(`Discord ready! Logged in as ${readyClient.user.tag}`)
+    ;(await client.guilds.cache.get("1447062853335912724")?.channels.fetch())!
+        .filter((x) => x instanceof TextChannel)
+        .forEach((channel) => {
+            discordNameToId[channel.name] = channel.id
+        })
+    console.log(discordNameToId)
+})
+
+client.login(Deno.env.get("DISCORD_TOKEN"))
+
 async function sendMessage(group: string, message: string) {
     const response = await (
         await fetch(
@@ -111,7 +129,7 @@ socket.addEventListener("open", () => {
 socket.addEventListener("message", (ev) => {
     console.log("Socket message", ev.data)
     const data = JSON.parse(ev.data)
-    function handleMessage(message: {
+    async function handleMessage(message: {
         id: string
         data?: {
             type: string
@@ -120,6 +138,7 @@ socket.addEventListener("message", (ev) => {
                 sender_type: string
                 text: string
                 group_id: string
+                name: string
             }
         }
     }) {
@@ -144,6 +163,17 @@ socket.addEventListener("message", (ev) => {
                 data.subject!.group_id,
                 subgroups.filter((x) => x.id == data.subject!.group_id)[0].name,
             )
+            const discordChannelId =
+                discordNameToId[
+                    subgroups.filter((x) => x.id == data.subject!.group_id)[0]
+                        .name
+                ]
+            if (!discordChannelId) return
+            const discordChannel = await client.channels.fetch(discordChannelId)
+            if (!(discordChannel instanceof TextChannel)) return
+            discordChannel.send(
+                "**" + data.subject!.name + "**\n" + data.subject!.text,
+            )
         }
     }
     // @ts-expect-error ugh i don't want to write this stuff
@@ -162,5 +192,5 @@ await sendMessage(
     Deno.env.get("BASE_GROUP")!,
     "Bot started, bridging channels:\n" +
         subgroups.map((x) => "#" + x.name).join("\n") +
-        "\nto Discord.",
+        "\nto Discord.\n\nNOTE: this bot is a work in progress and this message is false as it is only sending GroupMe messages to Discord, not the other way around.",
 )
